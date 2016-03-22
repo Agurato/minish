@@ -2,40 +2,56 @@
 
 int readkey();
 int main(int argc, char **argv){
-	char buffer[1024];
-	char *separator = { " " };
+	char *buffer;
+	char *separator = " ";
+
 	pid_t pidF;
-	int key = 1;
-	int i=0;
-	while(key != '\0'){
+
+	do {
 		char *token ;
 		char **charac;
 		char *save;
-		read(STDIN_FILENO, buffer,1024);
+
+
+		buffer = calloc(1024, sizeof(char));
+
+		charac = calloc(1024, sizeof(char*));
+
+		printf("> ");
+		scanf("%s", buffer);
+		buffer[sizeof(buffer)-2] = '\0';
+
+
 		token = strtok_r(buffer,separator,&save);
 
+		int i=0;
+
 		while(token != NULL){
-			printf("TOKEN = %s\n ", token);
 			*(charac+i) = token;
-			//token = '\0';
 			i++;
 			token = strtok_r(NULL, separator,&save);
 		}
+
 
 		switch(pidF = fork()){
 			case -1:
 				perror("Fork failed");
 				return 1;
 			case 0:
-				if(execvp(charac[0], charac) == -1){
-					perror("Commande non valide");
-					return 2;
+				if(strcmp(buffer, "exit") != 0) {
+					if(execvp(charac[0], charac) == -1){
+						perror("Commande non valide");
+						return 2;
+					}
+				}
+				else {
+					return 0;
 				}
 		}
+
 		while(waitpid(pidF,0,0) < 0);
-	}
 
-
+	} while(strcmp(buffer, "exit") != 0);
 
 	return 0;
 }
