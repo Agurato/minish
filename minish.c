@@ -6,6 +6,8 @@ int main(int argc, char **argv){
 	char *token;
 	char **charac;
 
+	int background = 0;
+
 	pid_t pidF;
 
 	do {
@@ -19,17 +21,20 @@ int main(int argc, char **argv){
 		fgets(buffer, 1024*sizeof(char), stdin);
 		buffer[strlen(buffer)-1] = '\0';
 
-		//printf("%s\n", buffer);
-
 		token = strtok(buffer, separator);
 
-		while(token != NULL){
-			charac[i] = token;
+		while(token != NULL) {
+			if(token[0] != '&') {
+				background = 0;
+				charac[i] = token;
+			}
+			else {
+				background = 1;
+			}
 
 			i++;
 			token = strtok(NULL, separator);
 		}
-		//charac[i-1][strlen(charac[i-1])-1] = '\0';
 
 		switch(pidF = fork()){
 			case -1:
@@ -37,18 +42,21 @@ int main(int argc, char **argv){
 				return 1;
 			case 0:
 				if(strcmp(buffer, "exit") != 0) {
-					printf("Fils : %s", charac[0]);
+
 					if(execvp(charac[0], charac) == -1){
 						perror("Commande non valide");
 						return 2;
 					}
+
 				}
 				else {
 					return 0;
 				}
 		}
 
-		while(waitpid(pidF,0,0) < 0);
+		if(!background) {
+			while(waitpid(pidF,0,0) < 0);
+		}
 
 	} while(strcmp(buffer, "exit") != 0);
 

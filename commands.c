@@ -2,10 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-char* redirectInput(char *filename) {
-	char* buffer;
-}
-
 /**
 * Handles redirection of output
 *
