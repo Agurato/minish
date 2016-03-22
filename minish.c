@@ -1,6 +1,5 @@
 #include "lib.h"
 
-int readkey();
 int main(int argc, char **argv){
 	char *buffer;
 	char *separator = " ";
@@ -8,30 +7,38 @@ int main(int argc, char **argv){
 	pid_t pidF;
 
 	do {
-		char *token ;
+		int i=0;
+		char *token;
 		char **charac;
-		char *save;
-
 
 		buffer = calloc(1024, sizeof(char));
 
 		charac = calloc(1024, sizeof(char*));
 
 		printf("> ");
-		scanf("%s", buffer);
-		buffer[sizeof(buffer)-2] = '\0';
+		fgets(buffer, 1024, stdin);
+		buffer[sizeof(buffer)-1] = '\0';
 
+		//printf("%s\n", buffer);
 
-		token = strtok_r(buffer,separator,&save);
-
-		int i=0;
+		token = strtok(buffer, separator);
 
 		while(token != NULL){
-			*(charac+i) = token;
-			i++;
-			token = strtok_r(NULL, separator,&save);
-		}
+			//*(charac+i) = calloc(sizeof(char), 1+strlen(token));
+			//strcpy(*(charac+i), token);
 
+			charac[i] = token;
+
+			printf("%d - %s : %ld\n", i, token, strlen(token));
+
+			//printf("%s", *(charac+i));
+			i++;
+			/*
+			token = calloc(1024, sizeof(char));
+			*/
+			token = strtok(NULL, separator);
+		}
+		//charac[i-1][strlen(charac[i-1])-1] = '\0';
 
 		switch(pidF = fork()){
 			case -1:
@@ -39,6 +46,7 @@ int main(int argc, char **argv){
 				return 1;
 			case 0:
 				if(strcmp(buffer, "exit") != 0) {
+					printf("Fils : %s", charac[0]);
 					if(execvp(charac[0], charac) == -1){
 						perror("Commande non valide");
 						return 2;
@@ -54,19 +62,4 @@ int main(int argc, char **argv){
 	} while(strcmp(buffer, "exit") != 0);
 
 	return 0;
-}
-
-int readkey(){
-	struct termios init;
-	struct termios config;
-	int key;
-	tcgetattr(STDIN_FILENO, &init);
-	config = init;
-	config.c_lflag &= ~ICANON;
-	config.c_lflag &= ~ECHO;
-
-	tcsetattr(STDIN_FILENO, TCSANOW, &config);
-	key = getchar();
-	tcsetattr(STDIN_FILENO, TCSANOW, &init);
-	return key;
 }
