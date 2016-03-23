@@ -9,7 +9,7 @@
 #include <pthread.h>
 
 #define MAXWORD 100
-#define MAXCHAR 60
+#define MAXCHAR 200
 
 pthread_t parsing;
 pthread_t treatment;
@@ -68,8 +68,13 @@ void *parse(void *t){
 			c = getchar();
 			pthread_mutex_lock(&mutex);
 			if(c > 32 && c != 127){
-				printf("%c",(char)c);
-				commande[nombreMot][j++] = (char)c;
+				if(j < MAXCHAR){
+					printf("%c",(char)c);
+					commande[nombreMot][j++] = (char)c;
+				}else{
+					fprintf(stdin,"Taille dépasse la limite autorisée\n");
+					c = 10;
+				}
 			}
 			if(c == 32){
 				printf(" ");
@@ -141,7 +146,8 @@ void *execute(void *p){
 				case 0:
 					//printf("cmd[0] = %s\n",commande[0]);
 					if(execvp(*cmd,cmd) == -1){
-						fprintf(stderr,"Erreur lors de execvp\n");
+					//	fprintf(stderr,"Erreur lors de execvp\n");
+						perror("Commande non trouvée ");
 						return p;
 					}
 			}
@@ -163,6 +169,9 @@ void *execute(void *p){
 	return p;
 }
 
+/**
+ * Cree les différents threads et attend leur fin
+ */
 int main(int argc, char **argv){
 
 	pthread_create(&parsing, 0, parse, 0);

@@ -3,7 +3,6 @@ all :
 
 minishPaul : parse.c lib.h
 	gcc -o paulMinish parse.c -pthread
-	make print
 
 print : paulMinish
 	echo "Pour mettre ce bash en standard : sudo cp ./<Exe> /usr/bin/"
