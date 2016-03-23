@@ -86,10 +86,12 @@ void *parse(void *t){
 				if(j > 0){
 					j--;
 					commande[nombreMot][j] = '\0';
+					printf("\033[1D \033[1D");
 				}
 				else if(j==0 && nombreMot>0){
 					nombreMot--;
 					j = sizeof(commande[nombreMot])-1;
+					printf("\033[1D \033[1D");
 				}
 			}
 			pthread_mutex_unlock(&mutex);
@@ -187,7 +189,9 @@ int main(int argc, char **argv){
 	pthread_mutex_destroy(&mutex);
 	pthread_cond_destroy(&endCmd);
 	pthread_cond_destroy(&endExecuting);
+	puts("\t\t**************************************");
+	puts("\t\t\tThank you for your use");
+	puts("\t\t**************************************");
 
-	puts("Thank you for your use");
 	return 0;
 }
