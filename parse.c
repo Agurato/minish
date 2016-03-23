@@ -8,6 +8,7 @@
  *	  pipe
  *	  redirection
  *	  define les différentes touches (pour rendre le code POSIX)
+ *	  free when we leave, create function cleanup
  * */
 #include "lib.h"
 #include <pthread.h>
@@ -46,22 +47,35 @@ static int nombreLettre = 0;
  * This function doesn't parse when user confirm his command
  */
 int parse(){
-	/* 
-	 * If it's a displayable character and not space
-	 */
 	if(c == 27){
-		int d = getchar();
-		if(d == 91){
+		struct termios init;
+		struct termios config;
+		int d;
+		tcgetattr(STDIN_FILENO, &init);
+		config = init;
+		config.c_cc[VMIN] = 0;
+		config.c_cc[VTIME] = 0;
+		tcsetattr(STDIN_FILENO, TCSANOW, &config);
+		if((d = getchar()) == 91){
 			if((d=getchar()) == 65){
+				int k;
 				if(currentSave < numberSave){
-					printf("\033[DD");
+					nombreMot = sizeof(save[currentSave-1]);
+					for(k=0;k<MAXWORD;k++)
+						commande[k] = calloc(nombreMot+1, sizeof(char));
+					commande = save[currentSave++];
+					/*\0332K = Erase line \033u = cursor go to the last save*/
+					//printf("\033[2K \033[u \033[1D\033[1D\033[1D\033[1D$ ");
+					for(k=0;k<nombreMot;k++){
+						printf("%s ", commande[k]);
+					}
 				}
-				printf("c=%d,%d\n",getchar(), getchar());
 			}
 			c = 0;
 		}
+		tcsetattr(STDIN_FILENO, TCSANOW, &init);
 	}
-	if(c > 32 && c != 127){
+	else if(c > 32 && c != 127){//Displayable 
 		if(nombreLettre < MAXCHAR){
 			printf("%c",(char)c);
 			commande[nombreMot][nombreLettre++] = (char)c;
@@ -70,10 +84,7 @@ int parse(){
 			c = 10;
 		}
 	}
-	/*
-	 * Space
-	 */
-	if(c == 32){
+	else if(c == 32){ //Space
 		printf(" ");
 		if(nombreMot < MAXWORD){
 			nombreLettre = 0;
@@ -84,10 +95,7 @@ int parse(){
 		}
 
 	}
-	/*
-	 * BackSpace
-	 */
-	if(c == 127){
+	else if(c == 127){ //BackSpace
 		if(nombreLettre > 0){
 			nombreLettre--;
 			commande[nombreMot][nombreLettre] = '\0';
@@ -136,6 +144,7 @@ void *readInput(void *t){
 		pthread_mutex_unlock(&mutex);
 
 		fputs("$ ", stdout);
+		printf("\033[s");
 		endExecute = 0;
 		do{
 			c = getchar();
@@ -147,7 +156,21 @@ void *readInput(void *t){
 		}while(c != 27 && c != 10);
 		puts(" ");
 		nombreMot++;
+		
+		/*
+		 * We save the commande that we type
+		 */
+		if(numberSave < MAXSAVE){
+			int i;
+			save[numberSave] = calloc(nombreMot+1, sizeof(char*));
+			for(i = 0;i < nombreMot;i++)
+				save[numberSave][i] = calloc(sizeof(commande[i]),sizeof(char));
+			save[numberSave++] = commande;
+		}
+
 		nombreLettre = 0;
+		currentSave = 0;
+		
 		pthread_cond_signal(&endCmd);
 	}
 	exitProgram = 1;
@@ -172,6 +195,7 @@ void *execute(void *p){
 		pthread_cond_wait(&endCmd, &mutex);
 
 		if(commande[0][0] != '\0'){
+			printf("%d\n",nombreMot);
 			if(!strncmp(commande[nombreMot-1], "&", sizeof(commande[nombreMot-1]))){
 				//	printf("commande = %s\n",commande[nombreMot-1]);
 				nombreMot--;
@@ -220,7 +244,7 @@ void *execute(void *p){
  * Cree les différents threads et attend leur fin
  */
 int main(int argc, char **argv){
-
+	save = calloc(MAXSAVE, sizeof(char**));
 	pthread_create(&parsing, 0, readInput, 0);
 	pthread_create(&treatment, 0, execute, 0);
 	if(pthread_mutex_init(&mutex,0) == -1){
