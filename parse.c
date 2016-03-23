@@ -16,11 +16,13 @@ pthread_t treatment;
 
 pthread_mutex_t mutex;
 pthread_cond_t endCmd;
+pthread_cond_t endExecuting;
 
 
 char **commande;
 
 int exitProgram = 0;
+int endExecute = 1;
 
 static int c = 0;
 static int nombreMot = 0;
@@ -54,16 +56,20 @@ void *parse(void *t){
 	while(c != 27){
 		int j = 0;
 
-		fputs("$ ", stdout);
+		pthread_mutex_lock(&mutex);
+		if(!endExecute){
+			pthread_cond_wait(&endExecuting, &mutex);
+		}
+		pthread_mutex_unlock(&mutex);
+
+			fputs("$ ", stdout);
+			endExecute = 0;
 		do{
 			c = getchar();
+			pthread_mutex_lock(&mutex);
 			if(c > 32 && c != 127){
 				printf("%c",(char)c);
-				//commande[i] = calloc(strlen(commande[i])+1, sizeof(char));
-				//printf("%ld",sizeof(commande[i]));
-				pthread_mutex_lock(&mutex);
 				commande[nombreMot][j++] = (char)c;
-				pthread_mutex_unlock(&mutex);
 			}
 			if(c == 32){
 				printf(" ");
@@ -76,13 +82,11 @@ void *parse(void *t){
 				}
 
 			}
+			pthread_mutex_unlock(&mutex);
 		}while(c != 27 && c != 10);
 			puts(" ");
 			nombreMot++;
-		//	for(j=0;j<i;j++){
-		//		printf("%s ", commande[j]);
 				pthread_cond_signal(&endCmd);
-		//	}
 	}
 	exitProgram = 1;
 	puts(" ");
@@ -94,30 +98,36 @@ void *parse(void *t){
  * Thread qui execture les commandes qu'on demande
  * TODO
  *	Prise en comtpe de &
- *	Debug
- *	SEGFAULT sur strcpy
  */
 void *execute(void *p){
 	char **cmd;
 	int k;
+	int pid;
 	while(!exitProgram){
 		pthread_mutex_lock(&mutex);
 		pthread_cond_wait(&endCmd, &mutex);
 		cmd = calloc(nombreMot+1 , sizeof(char*));
-		for(k=0;k<nombreMot;k++)
-			strncpy(cmd[k], commande[k], MAXCHAR);
-		switch(fork()){
-			case -1:
-				exitProgram = 1;
-				return p;
-			case 0:
-				printf("cmd[0] = %s\n",cmd[0]);
-				if(execvp(cmd[0],cmd) == -1){
-					fprintf(stderr,"Erreur lors de execvp\n");
-					return p;
-				}
+		for(k=0;k<nombreMot;k++){
+			cmd[k] = calloc(sizeof(commande[k]), sizeof(char));
+			strcpy(cmd[k], commande[k]);
 		}
-		while(waitpid(0,0,0) <= 0);
+		if(commande[0][0] != '\0'){
+			endExecute = 0;
+			switch(pid = fork()){
+				case -1:
+					exitProgram = 1;
+					return p;
+				case 0:
+					//printf("cmd[0] = %s\n",commande[0]);
+					if(execvp(*cmd,cmd) == -1){
+						fprintf(stderr,"Erreur lors de execvp\n");
+						return p;
+					}
+			}
+			while(waitpid(pid,0,0) <= 0);
+			endExecute = 1;
+			pthread_cond_signal(&endExecuting);
+		}
 		for(k=0;k<MAXWORD;k++){
 			commande[k] = calloc(MAXCHAR, sizeof(char));
 		}
@@ -140,12 +150,19 @@ int main(int argc, char **argv){
 		pthread_mutex_destroy(&mutex);
 		return 2;
 	}
+	if(pthread_cond_init(&endExecuting, 0) == -1){
+		fprintf(stderr,"Condition can't be initialized\n");
+		pthread_mutex_destroy(&mutex);
+		pthread_cond_destroy(&endCmd);
+	}
+
 
 	pthread_join(parsing, 0);
 	pthread_join(treatment,0);
 
 	pthread_mutex_destroy(&mutex);
 	pthread_cond_destroy(&endCmd);
+	pthread_cond_destroy(&endExecuting);
 
 	puts("Thank you for your use");
 	return 0;
