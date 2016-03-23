@@ -1,15 +1,20 @@
 /*
- *	Programme qui simule un bash
+ *	Programme sh
  *	1 Thread pour prendre le texte
  *	1 qui copie la commande et qui créé des processus 
- *	exitProgramme = 1 => Arrêt de tous les thread
- *
+ *	exitProgramme = 1 => Arrêt de tous les threads
+ *	TODO
+ *	  history
+ *	  pipe
+ *	  redirection
+ *	  define les différentes touches (pour rendre le code POSIX)
  * */
 #include "lib.h"
 #include <pthread.h>
 
 #define MAXWORD 100
 #define MAXCHAR 200
+#define MAXSAVE 50
 
 pthread_t parsing;
 pthread_t treatment;
@@ -20,12 +25,82 @@ pthread_cond_t endExecuting;
 
 
 char **commande;
+char ***save;
 
 int exitProgram = 0;
 int endExecute = 1;
 
+int currentSave = 0;
+int numberSave = 0;
+
+/*
+ * Static inutile
+ */
 static int c = 0;
 static int nombreMot = 0;
+static int nombreLettre = 0;
+
+
+/*
+ * Fonction that parse char when user type it
+ * This function doesn't parse when user confirm his command
+ */
+int parse(){
+	/* 
+	 * If it's a displayable character and not space
+	 */
+	if(c == 27){
+		int d = getchar();
+		if(d == 91){
+			if((d=getchar()) == 65){
+				if(currentSave < numberSave){
+					printf("\033[DD");
+				}
+				printf("c=%d,%d\n",getchar(), getchar());
+			}
+			c = 0;
+		}
+	}
+	if(c > 32 && c != 127){
+		if(nombreLettre < MAXCHAR){
+			printf("%c",(char)c);
+			commande[nombreMot][nombreLettre++] = (char)c;
+		}else{
+			fprintf(stdin,"Taille dépasse la limite autorisée\n");
+			c = 10;
+		}
+	}
+	/*
+	 * Space
+	 */
+	if(c == 32){
+		printf(" ");
+		if(nombreMot < MAXWORD){
+			nombreLettre = 0;
+			nombreMot++;
+		}else{
+			c = 10;
+			puts("Trop de mots, FIN");
+		}
+
+	}
+	/*
+	 * BackSpace
+	 */
+	if(c == 127){
+		if(nombreLettre > 0){
+			nombreLettre--;
+			commande[nombreMot][nombreLettre] = '\0';
+			printf("\033[1D \033[1D");
+		}
+		else if(nombreLettre==0 && nombreMot>0){
+			nombreMot--;
+			nombreLettre = sizeof(commande[nombreMot])-1;
+			printf("\033[1D \033[1D");
+		}
+	}
+	return 0;
+}
 
 
 /*
@@ -34,7 +109,7 @@ static int nombreMot = 0;
  *	Retour en arriere pris en compte
  *	Prise en compte de & => dire a execute DONE
  */
-void *parse(void *t){
+void *readInput(void *t){
 	int k;
 
 	struct termios initial;
@@ -54,8 +129,6 @@ void *parse(void *t){
 	pthread_mutex_unlock(&mutex);
 
 	while(c != 27){
-		int j = 0;
-
 		pthread_mutex_lock(&mutex);
 		if(!endExecute){
 			pthread_cond_wait(&endExecuting, &mutex);
@@ -66,43 +139,15 @@ void *parse(void *t){
 		endExecute = 0;
 		do{
 			c = getchar();
-			pthread_mutex_lock(&mutex);
-			if(c > 32 && c != 127){
-				if(j < MAXCHAR){
-					printf("%c",(char)c);
-					commande[nombreMot][j++] = (char)c;
-				}else{
-					fprintf(stdin,"Taille dépasse la limite autorisée\n");
-					c = 10;
-				}
-			}
-			if(c == 32){
-				printf(" ");
-				if(nombreMot < MAXWORD){
-					j = 0;
-					nombreMot++;
-				}else{
-					c = 10;
-					puts("Trop de mots, FIN");
-				}
 
-			}
-			if(c == 127){
-				if(j > 0){
-					j--;
-					commande[nombreMot][j] = '\0';
-					printf("\033[1D \033[1D");
-				}
-				else if(j==0 && nombreMot>0){
-					nombreMot--;
-					j = sizeof(commande[nombreMot])-1;
-					printf("\033[1D \033[1D");
-				}
-			}
+			pthread_mutex_lock(&mutex);
+			parse();
 			pthread_mutex_unlock(&mutex);
+
 		}while(c != 27 && c != 10);
 		puts(" ");
 		nombreMot++;
+		nombreLettre = 0;
 		pthread_cond_signal(&endCmd);
 	}
 	exitProgram = 1;
@@ -145,8 +190,10 @@ void *execute(void *p){
 					return p;
 				case 0:
 					//printf("cmd[0] = %s\n",commande[0]);
+					if(background)
+						printf("pid : %d\n", getpid());
 					if(execvp(*cmd,cmd) == -1){
-					//	fprintf(stderr,"Erreur lors de execvp\n");
+						//	fprintf(stderr,"Erreur lors de execvp\n");
 						perror("Commande non trouvée ");
 						return p;
 					}
@@ -174,7 +221,7 @@ void *execute(void *p){
  */
 int main(int argc, char **argv){
 
-	pthread_create(&parsing, 0, parse, 0);
+	pthread_create(&parsing, 0, readInput, 0);
 	pthread_create(&treatment, 0, execute, 0);
 	if(pthread_mutex_init(&mutex,0) == -1){
 		fprintf(stderr,"Failed to create mutex\n");
