@@ -32,7 +32,7 @@ static int nombreMot = 0;
  * Thread qui parse ce que l'on saisi
  * TODO :
  *	Retour en arriere pris en compte
- *	Prise en compte de & => dire a execute
+ *	Prise en compte de & => dire a execute DONE
  */
 void *parse(void *t){
 	int k;
@@ -49,7 +49,7 @@ void *parse(void *t){
 	pthread_mutex_lock(&mutex);
 	commande = malloc(MAXWORD * sizeof(char*));
 	for(k=0;k<MAXWORD;k++){
-			commande[k] = calloc(MAXCHAR , sizeof(char));
+		commande[k] = calloc(MAXCHAR , sizeof(char));
 	}
 	pthread_mutex_unlock(&mutex);
 
@@ -62,8 +62,8 @@ void *parse(void *t){
 		}
 		pthread_mutex_unlock(&mutex);
 
-			fputs("$ ", stdout);
-			endExecute = 0;
+		fputs("$ ", stdout);
+		endExecute = 0;
 		do{
 			c = getchar();
 			pthread_mutex_lock(&mutex);
@@ -82,11 +82,21 @@ void *parse(void *t){
 				}
 
 			}
+			if(c == 127){
+				if(j > 0){
+					j--;
+					commande[nombreMot][j] = '\0';
+				}
+				else if(j==0 && nombreMot>0){
+					nombreMot--;
+					j = sizeof(commande[nombreMot])-1;
+				}
+			}
 			pthread_mutex_unlock(&mutex);
 		}while(c != 27 && c != 10);
-			puts(" ");
-			nombreMot++;
-				pthread_cond_signal(&endCmd);
+		puts(" ");
+		nombreMot++;
+		pthread_cond_signal(&endCmd);
 	}
 	exitProgram = 1;
 	puts(" ");
@@ -97,21 +107,30 @@ void *parse(void *t){
 /*
  * Thread qui execture les commandes qu'on demande
  * TODO
- *	Prise en comtpe de &
+ *	Prise en comtpe de & DONE, voir si ca peut pas creer des problemes
  */
 void *execute(void *p){
 	char **cmd;
 	int k;
 	int pid;
+	int background = 0;
+
 	while(!exitProgram){
 		pthread_mutex_lock(&mutex);
 		pthread_cond_wait(&endCmd, &mutex);
-		cmd = calloc(nombreMot+1 , sizeof(char*));
-		for(k=0;k<nombreMot;k++){
-			cmd[k] = calloc(sizeof(commande[k]), sizeof(char));
-			strcpy(cmd[k], commande[k]);
-		}
+
 		if(commande[0][0] != '\0'){
+			if(!strncmp(commande[nombreMot-1], "&", sizeof(commande[nombreMot-1]))){
+				//	printf("commande = %s\n",commande[nombreMot-1]);
+				nombreMot--;
+				background = 1;
+				commande[nombreMot][0] = '\0';
+			}
+			cmd = calloc(nombreMot+1 , sizeof(char*));
+			for(k=0;k<nombreMot;k++){
+				cmd[k] = calloc(sizeof(commande[k]), sizeof(char));
+				strcpy(cmd[k], commande[k]);
+			}
 			endExecute = 0;
 			switch(pid = fork()){
 				case -1:
@@ -124,10 +143,15 @@ void *execute(void *p){
 						return p;
 					}
 			}
-			while(waitpid(pid,0,0) <= 0);
-			endExecute = 1;
-			pthread_cond_signal(&endExecuting);
+			if(!background){
+				while(waitpid(pid,0,0) <= 0);
+			}
 		}
+
+		pthread_cond_signal(&endExecuting);
+		endExecute = 1;
+		background = 0;
+
 		for(k=0;k<MAXWORD;k++){
 			commande[k] = calloc(MAXCHAR, sizeof(char));
 		}
