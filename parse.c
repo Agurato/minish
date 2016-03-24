@@ -4,7 +4,7 @@
  *	1 qui copie la commande et qui créé des processus 
  *	exitProgramme = 1 => Arrêt de tous les threads
  *	TODO
- *	  history
+ *	  history avec sauvegarde
  *	  pipe
  *	  redirection
  *	  define les différentes touches (pour rendre le code POSIX)
@@ -64,24 +64,27 @@ int parse(){
 		if((d = getchar()) == 91){
 			if((d=getchar()) == 65){
 				int k = 0;
-				for(k=0;k<save.taille[numberSave-1];k++)
-					printf("%s",save.string[numberSave-1][k]);
-				if(currentSave < numberSave){
+			//	for(k=0;k<save.taille[numberSave-1];k++)
+			//		printf("%s",save.string[numberSave-1][k]);
+				if(currentSave >= 0){
 					nombreMot = save.taille[currentSave];
 					commande = calloc(MAXWORD,sizeof(char*));
-					printf("currentSave = %d ",currentSave);
+				//	printf("currentSave = %d ",currentSave);
 					for(k=0;k<MAXWORD;k++){
 						commande[k] = calloc(MAXCHAR, sizeof(char));
-					//	if(save[currentSave][k] != NULL)
-							printf("%s", save.string[numberSave-1][k]);
-							strncpy(commande[k], save.string[currentSave][k], MAXCHAR);
 					}
-					currentSave++;
+					//	if(save[currentSave][k] != NULL)
+					for(k=0;k<save.taille[currentSave];k++){
+					//	printf("%s", save.string[currentSave][k]);
+						strcpy(commande[k], save.string[currentSave][k]);
+					}
 					/*\0332K = Erase line \033u = cursor go to the last save*/
-					//printf("\033[2K \033[u \033[1D\033[1D\033[1D\033[1D$ ");
+					printf("\033[2K \033[u \033[1D\033[1D\033[1D\033[1D$ ");
 					for(k=0;k<nombreMot;k++){
 						printf("%s ", commande[k]);
 					}
+					currentSave--;
+					nombreLettre = 0;
 				}
 			}
 			c = 0;
@@ -132,7 +135,6 @@ int parse(){
  */
 void *readInput(void *t){
 	int k;
-
 	struct termios initial;
 	struct termios config;
 
@@ -176,18 +178,17 @@ void *readInput(void *t){
 		if(numberSave < MAXSAVE){
 			int i;
 			save.string[numberSave] = calloc(nombreMot+1, sizeof(char*));
-			for(i = 0;i < nombreMot;i++)
+			for(i = 0;i < nombreMot;i++){
 				save.string[numberSave][i] = calloc(strlen(commande[i]),sizeof(char));
-			save.string[numberSave] = commande;
-			save.taille[numberSave++] = nombreMot;
-//			for(i=0; i < save.taille[numberSave-1];i++)
-//				printf("%s",save.string[numberSave-1][i]);
+				strcpy(save.string[numberSave][i], commande[i]);
+			}
+			save.taille[numberSave] = nombreMot;
+			numberSave++;
 		}
+		pthread_cond_signal(&endCmd);
 
 		nombreLettre = 0;
-		currentSave = 0;
-		
-		pthread_cond_signal(&endCmd);
+		currentSave = numberSave-1;
 	}
 	exitProgram = 1;
 	puts(" ");
@@ -213,7 +214,6 @@ void *execute(void *p){
 		if(commande[0][0] != '\0'){
 			if(strlen(commande[nombreMot-1]) == 1){
 				if(!strncmp(commande[nombreMot-1], "&", 1)){
-					//	printf("commande = %s\n",commande[nombreMot-1]);
 					nombreMot--;
 					background = 1;
 					commande[nombreMot][0] = '\0';
