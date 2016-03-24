@@ -5,10 +5,13 @@
  *	exitProgramme = 1 => Arrêt de tous les threads
  *	TODO
  *	  history avec sauvegarde
+ *	  Remove \n of history live
  *	  pipe
  *	  redirection
  *	  define les différentes touches (pour rendre le code POSIX)
  *	  free when we leave, create function cleanup
+ *	  
+ *	  getcwd pour connaitre sa position absolue
  * */
 #include "lib.h"
 #include <pthread.h>
@@ -85,6 +88,7 @@ int parse(){
 					}
 					currentSave--;
 					nombreLettre = 0;
+				//	nombreMot++;
 				}
 			}
 			c = 0;
