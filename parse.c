@@ -17,6 +17,11 @@
 #define MAXCHAR 200
 #define MAXSAVE 50
 
+typedef struct{
+	char ***string;
+	int *taille;
+}Save;
+
 pthread_t parsing;
 pthread_t treatment;
 
@@ -26,7 +31,7 @@ pthread_cond_t endExecuting;
 
 
 char **commande;
-char ***save;
+Save save;
 
 int exitProgram = 0;
 int endExecute = 1;
@@ -58,12 +63,20 @@ int parse(){
 		tcsetattr(STDIN_FILENO, TCSANOW, &config);
 		if((d = getchar()) == 91){
 			if((d=getchar()) == 65){
-				int k;
+				int k = 0;
+				for(k=0;k<save.taille[numberSave-1];k++)
+					printf("%s",save.string[numberSave-1][k]);
 				if(currentSave < numberSave){
-					nombreMot = sizeof(save[currentSave-1]);
-					for(k=0;k<MAXWORD;k++)
-						commande[k] = calloc(nombreMot+1, sizeof(char));
-					commande = save[currentSave++];
+					nombreMot = save.taille[currentSave];
+					commande = calloc(MAXWORD,sizeof(char*));
+					printf("currentSave = %d ",currentSave);
+					for(k=0;k<MAXWORD;k++){
+						commande[k] = calloc(MAXCHAR, sizeof(char));
+					//	if(save[currentSave][k] != NULL)
+							printf("%s", save.string[numberSave-1][k]);
+							strncpy(commande[k], save.string[currentSave][k], MAXCHAR);
+					}
+					currentSave++;
 					/*\0332K = Erase line \033u = cursor go to the last save*/
 					//printf("\033[2K \033[u \033[1D\033[1D\033[1D\033[1D$ ");
 					for(k=0;k<nombreMot;k++){
@@ -162,10 +175,13 @@ void *readInput(void *t){
 		 */
 		if(numberSave < MAXSAVE){
 			int i;
-			save[numberSave] = calloc(nombreMot+1, sizeof(char*));
+			save.string[numberSave] = calloc(nombreMot+1, sizeof(char*));
 			for(i = 0;i < nombreMot;i++)
-				save[numberSave][i] = calloc(sizeof(commande[i]),sizeof(char));
-			save[numberSave++] = commande;
+				save.string[numberSave][i] = calloc(strlen(commande[i]),sizeof(char));
+			save.string[numberSave] = commande;
+			save.taille[numberSave++] = nombreMot;
+//			for(i=0; i < save.taille[numberSave-1];i++)
+//				printf("%s",save.string[numberSave-1][i]);
 		}
 
 		nombreLettre = 0;
@@ -195,12 +211,13 @@ void *execute(void *p){
 		pthread_cond_wait(&endCmd, &mutex);
 
 		if(commande[0][0] != '\0'){
-			printf("%d\n",nombreMot);
-			if(!strncmp(commande[nombreMot-1], "&", sizeof(commande[nombreMot-1]))){
-				//	printf("commande = %s\n",commande[nombreMot-1]);
-				nombreMot--;
-				background = 1;
-				commande[nombreMot][0] = '\0';
+			if(strlen(commande[nombreMot-1]) == 1){
+				if(!strncmp(commande[nombreMot-1], "&", 1)){
+					//	printf("commande = %s\n",commande[nombreMot-1]);
+					nombreMot--;
+					background = 1;
+					commande[nombreMot][0] = '\0';
+				}
 			}
 			cmd = calloc(nombreMot+1 , sizeof(char*));
 			for(k=0;k<nombreMot;k++){
@@ -244,7 +261,9 @@ void *execute(void *p){
  * Cree les différents threads et attend leur fin
  */
 int main(int argc, char **argv){
-	save = calloc(MAXSAVE, sizeof(char**));
+	save.string = calloc(MAXSAVE, sizeof(char**));
+	save.taille = malloc(MAXSAVE * sizeof(int));
+
 	pthread_create(&parsing, 0, readInput, 0);
 	pthread_create(&treatment, 0, execute, 0);
 	if(pthread_mutex_init(&mutex,0) == -1){
@@ -269,9 +288,19 @@ int main(int argc, char **argv){
 	pthread_mutex_destroy(&mutex);
 	pthread_cond_destroy(&endCmd);
 	pthread_cond_destroy(&endExecuting);
+
+	/*
+	for(i=0;i<numberSave;i++){
+		for(j = 0;j < save.taille[j];j++)
+			free(save.string[i][j]);
+	}
+	free(save.taille);
+	*/
 	puts("\t\t**************************************");
 	puts("\t\t\tThank you for your use");
 	puts("\t\t**************************************");
 
 	return 0;
 }
+
+/*void cleanup(){}*/

@@ -2,7 +2,7 @@ all :
 	gcc -o minish minish.c -Wall -pedantic
 
 minishPaul : parse.c lib.h
-	gcc -o paulMinish parse.c -pthread
+	gcc -o paulMinish parse.c -pthread -g -Wall
 
 print : paulMinish
 	echo "Pour mettre ce bash en standard : sudo cp ./<Exe> /usr/bin/"
